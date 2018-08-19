@@ -1,6 +1,6 @@
 """
 UVA 195 - Anagram
-Searching strategy: DFS
+Searching strategy: BFS
 """
 
 from queue import Queue
