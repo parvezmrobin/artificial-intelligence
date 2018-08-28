@@ -3,8 +3,8 @@ Minimum Spanning Tree
 Using *Genetic Algorithm*
 """
 from argparse import ArgumentError
-from math import inf
-from random import shuffle, random, randint
+import math
+from random import random, randint
 from typing import List
 
 true, false, null = True, False, None
@@ -12,13 +12,12 @@ true, false, null = True, False, None
 
 class CityRepository:
     number_of_cities = 4
-    edges = [(0, 3, 5), (1, 2, 3), (1, 3, 4), (2, 1, 3), (3, 0, 5), (3, 1, 4), ]
+    edges = [(0, 3, 5), (1, 2, 2), (1, 3, 4), (2, 1, 3), (3, 0, 5), (3, 1, 4), ]
 
     @staticmethod
     def cities_from(src):
         """
         Returns a list of cities accessible from src
-        :param src:
         :rtype: List[(int, int)]
         """
         return [(to, dist) for frm, to, dist in CityRepository.edges if frm == src]
@@ -27,21 +26,18 @@ class CityRepository:
     def distance(src, dest):
         """
         Distance of road from src to dest
-        :param src: source of the road
-        :param dest: destination of the road
         :rtype: float|int
         """
         for frm, to, cost in CityRepository.edges:
             if frm == src and to == dest:
                 return cost
 
-        return inf
+        return math.inf
 
     @staticmethod
     def cost_of_road(index):
         """
         Returns the cost of a road by index
-        :param index: index of road
         :rtype: Union[int, float]
         """
         return CityRepository.edges[index][2]
@@ -50,7 +46,6 @@ class CityRepository:
     def at(index):
         """
         Get the road at the specified index
-        :param index: int
         :return: Tuple[int, int, float]
         """
         return CityRepository.edges[index]
@@ -98,32 +93,62 @@ class Chromosome:
             self.genes = genes
 
         # Cache for total distance
-        self.span_cache = null
+        self.cost_cache = null
 
-    def total_span(self):
-        if self.span_cache is not null:
-            return self.span_cache
+    def cost(self):
+        if self.cost_cache is not null:
+            return self.cost_cache
 
+        disconnected_sets = []
         cities = set()
-        self.span_cache = 0
+        total_cost = 0.
         for gene in self.genes:
             frm, to, cost = CityRepository.at(gene)
-            self.span_cache += cost
+            total_cost += cost
             cities.add(frm)
             cities.add(to)
 
+            set_of_from = -1
+            set_of_to = -1
+            for i, disconnected_set in enumerate(disconnected_sets):
+                if frm in disconnected_set:
+                    set_of_from = i
+                if to in disconnected_set:
+                    set_of_to = i
+                if set_of_from != -1 and set_of_to != -1:
+                    break
+            if set_of_from == -1:
+                if set_of_to == -1:
+                    disconnected_sets.append([frm, to])
+                else:
+                    disconnected_sets[set_of_to].append(frm)
+            else:
+                if set_of_to == -1:
+                    disconnected_sets[set_of_from].append(to)
+                elif set_of_from != set_of_to:
+                    disconnected_sets[set_of_from] += disconnected_sets[set_of_to]
+                    del disconnected_sets[set_of_to]
+
+        # If all cities ain't present, its invalid
         if len(cities) < CityRepository.number_of_cities:
-            self.span_cache = inf
+            total_cost = math.inf
         if len(cities) > CityRepository.number_of_cities:
             raise ValueError("Gene contains cities more than actually exists")
-        return self.span_cache
+
+        # Cost is (sum of road costs) * (number of sets)
+        self.cost_cache = total_cost * len(disconnected_sets)
+        return self.cost_cache
 
     @property
     def fitness(self):
-        return 1 / self.total_span()
+        cost = self.cost()
+        fit = 1 / cost
+        if math.isnan(fit):
+            raise RuntimeError("Culprit found!")
+        return fit
 
     def set(self, index, gene):
-        self.span_cache = null
+        self.cost_cache = null
         self.genes[index] = gene
 
     def get(self, index):
@@ -213,7 +238,7 @@ class Population:
         del self.chromosomes[index]
 
     def sort(self):
-        self.chromosomes = sorted(self.chromosomes, key=lambda ch: ch.total_span())
+        self.chromosomes = sorted(self.chromosomes, key=lambda ch: ch.cost())
 
     def __len__(self):
         return len(self.chromosomes)
@@ -274,9 +299,11 @@ class Evolution:
         Using roulette method
         :rtype: Chromosome
         """
-        total_fitness = 0
+        total_fitness = 0.
         for chromosome in self.population:
-            total_fitness += chromosome.fitness
+            prev_fitness = total_fitness
+            total_fitness = total_fitness + chromosome.fitness
+            a = 5
 
         dice = random()
         revolution = 0
@@ -314,7 +341,8 @@ class Evolution:
 def main():
     obj = Evolution()
     obj.evolve()
-    print(obj.population.best())
+    best = obj.population.best()
+    print("Roads:", best, "with cost:", best.cost())
 
 
 main()
