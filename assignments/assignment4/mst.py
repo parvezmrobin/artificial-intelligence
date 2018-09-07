@@ -13,16 +13,16 @@ true, false, null = True, False, None
 class CityRepository:
     number_of_cities = 10
     costs = [
-        [inf,   10,     5,      inf,    inf,    inf,    inf,    inf,    6,      inf],
-        [10,    inf,    4,      30,     28,     19,     12,     4,      inf,    inf],
-        [5,     4,      inf,    inf,    25,     inf,    inf,    inf,    13,     inf],
-        [inf,   30,     inf,    inf,    7,      inf,    5,      40,     inf,    inf],
-        [inf,   28,     25,     7,      inf,    60,     inf,    inf,    inf,    11 ],
-        [inf,   19,     inf,    inf,    60,     inf,    inf,    17,     6,      1, ],
-        [inf,   12,     inf,    5,      inf,    inf,    inf,    8,      inf,    inf],
-        [inf,   4,      inf,    40,     inf,    17,     8,      inf,    inf,    14 ],
-        [6,     inf,    13,     inf,    inf,    6,      inf,    inf,    inf,    4, ],
-        [inf,   inf,    inf,    inf,    11,     1,      inf,    14,     4,      inf]
+        [inf, 10,   5,    inf,  inf,  inf,  inf,  inf,  6,    inf],
+        [10,  inf,  4,    30,   28,   19,   12,   4,    inf,  inf],
+        [5,   4,    inf,  inf,  25,   inf,  inf,  inf,  13,   inf],
+        [inf, 30,   inf,  inf,  7,    inf,  5,    40,   inf,  inf],
+        [inf, 28,   25,   7,    inf,  60,   inf,  inf,  inf,  11],
+        [inf, 19,   inf,  inf,  60,   inf,  inf,  17,   6,    1, ],
+        [inf, 12,   inf,  5,    inf,  inf,  inf,  8,    inf,  inf],
+        [inf, 4,    inf,  40,   inf,  17,   8,    inf,  inf,  14],
+        [6,   inf,  13,   inf,  inf,  6,    inf,  inf,  inf,  4, ],
+        [inf, inf,  inf,  inf,  11,   1,    inf,  14,   4,    inf]
     ]
 
     @staticmethod
@@ -110,6 +110,7 @@ class Chromosome:
         # Cache for total distance
         self.cost_cache = null
 
+    @property
     def cost(self):
         if self.cost_cache is not null:
             return self.cost_cache
@@ -146,7 +147,7 @@ class Chromosome:
 
         # If all cities ain't present, its invalid
         if len(cities) < CityRepository.number_of_cities:
-            total_cost = math.inf
+            total_cost = inf
         if len(cities) > CityRepository.number_of_cities:
             raise ValueError("Gene contains cities more than actually exists")
 
@@ -156,11 +157,33 @@ class Chromosome:
 
     @property
     def fitness(self):
-        cost = self.cost()
-        fit = 1 / cost
+        fit = 1 / self.cost
         if math.isnan(fit):
             raise RuntimeError("Culprit found!")
         return fit
+
+    def crossover(self, parent2):
+        parent1 = self
+        child1, child2 = Chromosome(), Chromosome()
+        assert len(parent1) == len(parent2)
+        length = len(parent1) - 1
+        break_point = randint(0, length)
+
+        for i in range(break_point):
+            child1.set(i, parent1.get(i))
+            child2.set(i, parent2.get(i))
+        for i in range(break_point, length + 1):
+            child1.set(i, parent2.get(i))
+            child2.set(i, parent1.get(i))
+
+        return child1, child2
+
+    def mutate(self, mutation_rate):
+        if random() < mutation_rate:
+            index = randint(0, len(self) - 1)
+            value = randint(0, CityRepository.number_of_roads() - 1)
+            self.set(index, value)
+        return self
 
     def set(self, index, gene):
         self.cost_cache = null
@@ -263,7 +286,7 @@ class Population:
         del self.chromosomes[index]
 
     def sort(self):
-        self.chromosomes = sorted(self.chromosomes, key=lambda ch: ch.cost())
+        self.chromosomes = sorted(self.chromosomes, key=lambda ch: ch.cost)
 
     def __len__(self):
         return len(self.chromosomes)
@@ -291,11 +314,11 @@ class Environment:
             for i in range(int(len(self) / 2)):
                 parent1 = self.select_for_crossover()
                 parent2 = self.select_for_crossover()
-                offspring1, offspring2 = Environment.crossover(parent1, parent2)
+                offspring1, offspring2 = parent1.crossover(parent2)
                 if random() < self.mutation_rate:
-                    offspring1 = self.mutate(offspring1)
+                    offspring1 = offspring1.mutate(self.mutation_rate)
                 if random() < self.mutation_rate:
-                    offspring2 = self.mutate(offspring2)
+                    offspring2 = offspring2.mutate(self.mutation_rate)
                 new_pop.add(offspring1)
                 new_pop.add(offspring2)
 
@@ -314,7 +337,7 @@ class Environment:
                 self.population = Population(best_half)
 
             if log:
-                print("At iteration {}, best cost: {}".format(time, self.population.best().cost()))
+                print("At iteration {}, best cost: {}".format(time, self.population.best().cost))
 
         return self.population.best()
 
@@ -339,41 +362,18 @@ class Environment:
 
         raise RuntimeError("This can only be raised by precision error.")
 
-    @staticmethod
-    def crossover(parent1, parent2):
-        child1, child2 = Chromosome(), Chromosome()
-        assert len(parent1) == len(parent2)
-        l = len(parent1) - 1
-        break_point = randint(0, l)
-
-        for i in range(break_point):
-            child1.set(i, parent1.get(i))
-            child2.set(i, parent2.get(i))
-        for i in range(break_point, l + 1):
-            child1.set(i, parent2.get(i))
-            child2.set(i, parent1.get(i))
-
-        return child1, child2
-
-    def mutate(self, chromosome):
-        if random() < self.mutation_rate:
-            index = randint(0, len(chromosome) - 1)
-            value = randint(0, CityRepository.number_of_roads() - 1)
-            chromosome.set(index, value)
-        return chromosome
-
 
 Environment.strategies = ['whole_new', 'best_only', 'keep_parents']
-Environment.default_population_size = 1000
+Environment.default_population_size = 500
 
 
 def main():
-    # 0 for keep_parents, 2 for whole_new
-    seed(2)
-    env = Environment(strategy='best_only')
+    # (0, .1) for keep_parents, (0, .5) for whole_new
+    seed(0)
+    env = Environment(mutation_rate=.5, strategy='whole_new')
     env.evolve(times=30, log=true)
     best = env.population.best()
-    print("Roads:", best, "with cost:", best.cost())
+    print("Roads:", best, "with cost:", best.cost)
     print("Full Path:")
     for gene in best:
         print(CityRepository.at(gene))
