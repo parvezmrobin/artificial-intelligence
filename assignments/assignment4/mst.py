@@ -2,17 +2,28 @@
 Minimum Spanning Tree
 Using *Genetic Algorithm*
 """
-from argparse import ArgumentError
 import math
-from random import random, randint
+from math import inf, isinf
+from random import random, randint, seed
 from typing import List
 
 true, false, null = True, False, None
 
 
 class CityRepository:
-    number_of_cities = 4
-    edges = [(0, 3, 5), (1, 2, 2), (1, 3, 4), (2, 1, 3), (3, 0, 5), (3, 1, 4), ]
+    number_of_cities = 10
+    costs = [
+        [inf,   10,     5,      inf,    inf,    inf,    inf,    inf,    6,      inf],
+        [10,    inf,    4,      30,     28,     19,     12,     4,      inf,    inf],
+        [5,     4,      inf,    inf,    25,     inf,    inf,    inf,    13,     inf],
+        [inf,   30,     inf,    inf,    7,      inf,    5,      40,     inf,    inf],
+        [inf,   28,     25,     7,      inf,    60,     inf,    inf,    inf,    11 ],
+        [inf,   19,     inf,    inf,    60,     inf,    inf,    17,     6,      1, ],
+        [inf,   12,     inf,    5,      inf,    inf,    inf,    8,      inf,    inf],
+        [inf,   4,      inf,    40,     inf,    17,     8,      inf,    inf,    14 ],
+        [6,     inf,    13,     inf,    inf,    6,      inf,    inf,    inf,    4, ],
+        [inf,   inf,    inf,    inf,    11,     1,      inf,    14,     4,      inf]
+    ]
 
     @staticmethod
     def cities_from(src):
@@ -20,7 +31,8 @@ class CityRepository:
         Returns a list of cities accessible from src
         :rtype: List[(int, int)]
         """
-        return [(to, dist) for frm, to, dist in CityRepository.edges if frm == src]
+        # return [(to, dist) for frm, to, dist in CityRepository.edges if frm == src]
+        return list(enumerate(CityRepository.costs[src]))
 
     @staticmethod
     def distance(src, dest):
@@ -28,11 +40,7 @@ class CityRepository:
         Distance of road from src to dest
         :rtype: float|int
         """
-        for frm, to, cost in CityRepository.edges:
-            if frm == src and to == dest:
-                return cost
-
-        return math.inf
+        return CityRepository.costs[src][dest]
 
     @staticmethod
     def cost_of_road(index):
@@ -40,7 +48,7 @@ class CityRepository:
         Returns the cost of a road by index
         :rtype: Union[int, float]
         """
-        return CityRepository.edges[index][2]
+        return CityRepository.at(index)[2]
 
     @staticmethod
     def at(index):
@@ -48,7 +56,14 @@ class CityRepository:
         Get the road at the specified index
         :return: Tuple[int, int, float]
         """
-        return CityRepository.edges[index]
+        count = 0
+        for frm in range(CityRepository.number_of_cities):
+            for to in range(CityRepository.number_of_cities):
+                if not isinf(CityRepository.costs[frm][to]):
+                    if count == index:
+                        return frm, to, CityRepository.costs[frm][to]
+                    count += 1
+        raise IndexError("No road with this index")
 
     @staticmethod
     def number_of_roads():
@@ -56,7 +71,7 @@ class CityRepository:
         Get the number of roads
         :rtype: int
         """
-        return len(CityRepository.edges)
+        return 44
 
 
 class Chromosome:
@@ -174,7 +189,15 @@ class Population:
     chromosomes: List[Chromosome]
 
     def __init__(self, chrome=null, initialize=false):
-        if chrome == null:
+        """
+        Initializes a population with either a list of chromosomes
+        or a number of chromosomes or null by default.
+        if chrome is int and initialize is true, then a list of
+        random chromosomes will be produced.
+        :type chrome: Union[list, int, null]
+        :type initialize: bool
+        """
+        if chrome is null:
             self.chromosomes = []
         elif isinstance(chrome, int):
             self.chromosomes = [Chromosome(initialize=initialize) for i in range(chrome)]
@@ -221,6 +244,8 @@ class Population:
             self.chromosomes.append(chromosome)
         elif isinstance(chromosome, Population):
             self.chromosomes += chromosome.chromosomes
+        elif isinstance(chromosome, list):
+            self.chromosomes += chromosome
         else:
             raise TypeError(
                 "Only chromosome or population can be added to population. " + type(chromosome) + " given."
@@ -247,28 +272,26 @@ class Population:
         return iter(self.chromosomes)
 
 
-class Evolution:
-    strategies = ['whole_new', 'best_only', 'keep_parents']
-    default_population_size = 100
+class Environment:
 
     def __init__(self, population=null, mutation_rate=.02, strategy='whole_new'):
         if population is not null:
             self.population = population
         else:
-            self.population = Population(self.default_population_size, initialize=true)
+            self.population = Population(Environment.default_population_size, initialize=true)
 
-        if strategy not in self.strategies:
-            raise ArgumentError("Unsupported update strategy")
+        if strategy not in Environment.strategies:
+            raise RuntimeError("Unsupported update strategy")
         self.strategy = strategy
         self.mutation_rate = mutation_rate
 
-    def evolve(self, times=100):
+    def evolve(self, times=100, log=false):
         for time in range(times):
             new_pop = Population()
             for i in range(int(len(self) / 2)):
                 parent1 = self.select_for_crossover()
                 parent2 = self.select_for_crossover()
-                offspring1, offspring2 = Evolution.crossover(parent1, parent2)
+                offspring1, offspring2 = Environment.crossover(parent1, parent2)
                 if random() < self.mutation_rate:
                     offspring1 = self.mutate(offspring1)
                 if random() < self.mutation_rate:
@@ -276,18 +299,22 @@ class Evolution:
                 new_pop.add(offspring1)
                 new_pop.add(offspring2)
 
-            if self.strategy == self.strategies[0]:  # whole_new
+            if self.strategy == Environment.strategies[0]:  # whole_new
                 self.population = new_pop
-            elif self.strategy == self.strategies[1]:  # best_only
+            elif self.strategy == Environment.strategies[1]:  # best_only
                 _, worst_index = new_pop.worst(return_index=true)
                 new_pop.remove(worst_index)
                 best_parent = self.population.best()
                 new_pop.add(best_parent)
                 self.population = new_pop
-            elif self.strategy == self.strategies[2]:  # keep_parents
+            elif self.strategy == Environment.strategies[2]:  # keep_parents
                 new_pop.add(self.population)
                 new_pop.sort()
-                self.population = new_pop.at_range(to=len(self.population))
+                best_half = new_pop.at_range(to=len(self.population))
+                self.population = Population(best_half)
+
+            if log:
+                print("At iteration {}, best cost: {}".format(time, self.population.best().cost()))
 
         return self.population.best()
 
@@ -301,15 +328,13 @@ class Evolution:
         """
         total_fitness = 0.
         for chromosome in self.population:
-            prev_fitness = total_fitness
             total_fitness = total_fitness + chromosome.fitness
-            a = 5
 
-        dice = random()
+        roulette = random()
         revolution = 0
         for chromosome in self.population:
             revolution += chromosome.fitness
-            if revolution / total_fitness >= dice:
+            if revolution / total_fitness >= roulette:
                 return chromosome
 
         raise RuntimeError("This can only be raised by precision error.")
@@ -338,11 +363,20 @@ class Evolution:
         return chromosome
 
 
+Environment.strategies = ['whole_new', 'best_only', 'keep_parents']
+Environment.default_population_size = 1000
+
+
 def main():
-    obj = Evolution()
-    obj.evolve()
-    best = obj.population.best()
+    # 0 for keep_parents, 2 for whole_new
+    seed(2)
+    env = Environment(strategy='best_only')
+    env.evolve(times=30, log=true)
+    best = env.population.best()
     print("Roads:", best, "with cost:", best.cost())
+    print("Full Path:")
+    for gene in best:
+        print(CityRepository.at(gene))
 
 
 main()
