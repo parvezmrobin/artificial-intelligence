@@ -369,7 +369,7 @@ Environment.default_population_size = 500
 
 def main():
     # (0, .1) for keep_parents, (0, .5) for whole_new
-    seed(0)
+    seed(2)
     env = Environment(mutation_rate=.5, strategy='whole_new')
     env.evolve(times=30, log=true)
     best = env.population.best()
